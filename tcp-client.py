@@ -16,19 +16,34 @@ def main():
     print(f"type(original_bytes): {type(original_bytes)}")
 
      # Base64 エンコード → これは ASCII テキストだが bytes として送る
-    b64_bytes = base64.b64encode(original_bytes)  # type: bytes
+    b64_bytes = base64.b64encode(original_bytes)
     print(f"b64_bytes: {b64_bytes}")
     print(f"type(original_bytes): {type(original_bytes)}")
 
-    print(f"➡️ 送信前（元文字列）: {original}")
-    print(f"➡️ 送信する Base64 (bytes): {b64_bytes!r}")
+    print(f"送信前（元文字列）: {original}")
+    print(f"送信する Base64 (bytes): {b64_bytes!r}")
 
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.connect((HOST, PORT))
+    with socket.create_connection((HOST, PORT), timeout=5) as s:
         s.sendall(b64_bytes)
-    print("✅ バイナリデータを送信しました。")
+        s.shutdown(socket.SHUT_WR)  # 書き込み終わりを明示（必要）
+        print("バイトデータを送信完了 → 応答待ち...")
+
+        received = b""
+        while True:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            received += chunk
+
+        if not received:
+            print("サーバーからの応答がありません。")
+            return
+
+        decoded = base64.b64decode(received).decode("utf-8")
+        print(f"サーバーからの応答（デコード後）: {decoded}")
+
+    print("通信終了")
 
 
 if __name__ == "__main__":
     main()
-
