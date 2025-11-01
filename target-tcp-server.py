@@ -11,6 +11,7 @@ def handle_client(conn, addr):
     """クライアントからの接続を処理"""
     print(f"📡 接続: {addr}")
     try:
+        conn.setblocking(True)
         data = conn.recv(4096)
         if not data:
             print("⚠️ データが空です。")
@@ -19,6 +20,11 @@ def handle_client(conn, addr):
         # 受信データをBase64デコードして確認
         decoded = base64.b64decode(data).decode('utf-8')
         print(f"📥 受信データ（デコード後）: {decoded}")
+
+        response_text = f"✅ Targetからの応答: 受信内容='{decoded}'"
+        encoded_response = base64.b64encode(response_text.encode('utf-8'))
+        conn.sendall(encoded_response)
+        print(f"📤 応答送信（エンコード後）: {encoded_response}")
 
     except Exception as e:
         print(f"❌ エラー: {e}")

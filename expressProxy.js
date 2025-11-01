@@ -8,7 +8,7 @@ const TCP_FORWARD_PORT = 6000; // 転送先TCPサーバのポート
 app.post(
   "/upload",
   express.raw({ type: "application/octet-stream", limit: "50mb" }),
-  (req, res) => {
+  async (req, res) => {
     try {
       const b64Buffer = req.body;
       console.log(
@@ -22,35 +22,39 @@ app.post(
       const decoded = Buffer.from(b64String, "base64").toString("utf8");
       console.log("🔍 デコード結果 (utf-8):", decoded);
 
-      res.status(200).send("OK"); // 先にリクエストを返す
+      // TCP通信をPromiseで包んで「送信＋応答受信」を待つ
+      const responseB64 = await new Promise((resolve, reject) => {
+        const client = new net.Socket();
+        let responseChunks = [];
 
-      // 次に送る文字列を作って Base64 エンコード（文字列 => Base64 文字列）
-      const nextMsg = "Hello from Node.js Express server!";
-      const nextB64String = Buffer.from(nextMsg, "utf8").toString("base64"); // これは base64 文字列
-      const nextB64Buffer = Buffer.from(nextB64String, "ascii"); // ASCII bytes として送る
-
-      // 目的のTCPサーバへ送信
-      const client = new net.Socket();
-
-      client.connect(TCP_FORWARD_PORT, TCP_FORWARD_HOST, () => {
-        client.write(nextB64Buffer, () => {
-          console.log("➡️ TCPサーバへ転送完了");
-          client.end(); // ✅ 送信完了後に安全に終了
+        client.connect(TCP_FORWARD_PORT, TCP_FORWARD_HOST, () => {
+          console.log("➡️ 目的のTCPサーバへ送信");
+          client.write(b64Buffer); // Base64エンコード済みのまま送る
         });
 
-        // client.write(nextB64Buffer);
-        // console.log("➡️ 目的のTCPサーバへ転送完了");
-        // client.end();　/// データ送信後すぐにで接続を閉じない
+        client.on("data", (data) => {
+          console.log("📨 目的のTCPサーバから応答受信:", data.length, "bytes");
+          responseChunks.push(data);
+        });
+
+        client.on("end", () => {
+          const fullResponse = Buffer.concat(responseChunks);
+          resolve(fullResponse); // Base64文字列のバイト列を返す
+        });
+
+        client.on("error", (err) => {
+          console.error("❌ TCPクライアントエラー:", err.message);
+          reject(err);
+        });
       });
 
-      // エラー監視
-      client.on("error", (err) => {
-        console.error("❌ TCPクライアントエラー:", err.message);
-      });
+      // Node.js → Python Gateway へのHTTPレスポンスとして返す
+      res
+        .status(200)
+        .set("Content-Type", "application/octet-stream")
+        .send(responseB64); // targetからの応答(Base64)をそのまま返す
 
-      client.on("close", () => {
-        console.log("🔌 TCPクライアント接続を閉じました\n");
-      });
+      console.log("📤 HTTPレスポンス返却完了\n");
 
       // TCPクライアント接続を閉じた後にレスポンスを返す
     } catch (err) {
