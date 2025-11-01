@@ -9,19 +9,20 @@ PORT = 6000
 
 def handle_client(conn, addr):
     """クライアントからの接続を処理"""
-    print(f"接続: {addr}")
+    print(f"---------- 接続: {addr} ----------\n") 
     try:
         conn.setblocking(True)
         data = conn.recv(4096)
         if not data:
-            print("⚠️ データが空です。")
+            print("データが空です。")
             return
 
         # 受信データをBase64デコードして確認
         decoded = base64.b64decode(data).decode('utf-8')
-        print(f"受信データ（デコード後）: {decoded}")
+        print(f"受信データ（デコード後）: {decoded}\n")
 
-        response_text = f"Targetからの応答: 受信内容='{decoded}'"
+        print(f"レスポンスメッセージを作成")
+        response_text = "response from target tcp server!"
         encoded_response = base64.b64encode(response_text.encode('utf-8'))
         conn.sendall(encoded_response)
         print(f"応答送信（エンコード後）: {encoded_response}")
@@ -31,7 +32,7 @@ def handle_client(conn, addr):
     
     finally:
         conn.close()
-        print(f"接続終了: {addr}\n")
+        print(f"\n---------- 接続終了: {addr} ----------\n")
 
 
 def start_server():
@@ -41,7 +42,7 @@ def start_server():
         server_socket.listen()
         server_socket.setblocking(False)
 
-        print(f"目的のTCPサーバ起動中... {HOST}:{PORT}")
+        print(f"Target TCP Server起動中... {HOST}:{PORT}\n")
         try:
             while True:
                 # selectで接続を待機

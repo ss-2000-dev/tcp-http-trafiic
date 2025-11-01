@@ -13,7 +13,7 @@ HTTP_SERVER_URL = 'http://127.0.0.1:3000/upload'  # Node.js側のエンドポイ
 
 def handle_client(conn, addr): 
     """クライアントごとの接続処理""" 
-    print(f"接続: {addr}") 
+    print(f"---------- 接続: {addr} ----------\n") 
     conn.setblocking(True) # なくても動作はする
     data = b'' 
     try: 
@@ -29,23 +29,23 @@ def handle_client(conn, addr):
         print("受信データなし")
         return 
     
-    print(f"tcp-gateway が受け取った raw bytes: {data!r}") 
+    print(f"tcp-gateway が受け取ったデータサイズ: {data!r}") 
     
     # data は Base64 の ASCII bytes で来る想定 → デコードして中身確認 
     try: 
         decoded = base64.b64decode(data) 
-        print(f"デコード結果(utf-8): {decoded.decode('utf-8')}") 
+        print(f"デコード結果(utf-8): {decoded.decode('utf-8')}\n") 
     except Exception as e: 
         print(f"Base64 デコード失敗: {e}") 
         return 
     
     # 次に送る別の文字列を準備して Base64 エンコード 
-    next_msg = "Hello from Python TCP gateway server!" 
+    next_msg = decoded.decode('utf-8') + ", python tcp gateway server!" 
+    print(f"次サーバへ送るメッセージ: {next_msg}") 
     next_b64 = base64.b64encode(next_msg.encode('utf-8')) # bytes 
-    print(f"次サーバへ送る Base64 (bytes): {next_b64!r}") 
+    print(f"次サーバへ送る Base64 (bytes): {next_b64!r}\n") 
     
     # HTTPでNode.jsサーバーに転送 
-    print(f"受信データサイズ: {len(next_b64)} bytes") 
     try: 
         headers = {'Content-Type': 'application/octet-stream'} 
         response = requests.post(HTTP_SERVER_URL, headers=headers, data=next_b64, timeout=5) 
@@ -57,12 +57,21 @@ def handle_client(conn, addr):
     
     # Node.js からの応答（Base64のbytes）を受信
     if response.content:
-        print(f"Node.jsからのレスポンス: {base64.b64decode(response.content).decode('utf-8')}") 
-        print(f"Node.jsからのレスポンス: {response.content}") 
-
-        # TCPクライアントへそのまま返す（Base64のままでもよい）
         try:
-            conn.sendall(response.content)
+            # Base64デコードして中身を確認
+            decoded_text = base64.b64decode(response.content).decode("utf-8")
+            print(f"Node.jsからのレスポンス(デコード後): {decoded_text}")
+
+            # メッセージに追加情報を付与
+            modified_msg = decoded_text + ", python tcp gateway server!"
+            print(f"クライアントへ返すメッセージ: {modified_msg}")
+
+            # Base64に再エンコード
+            modified_b64 = base64.b64encode(modified_msg.encode("utf-8"))
+            print(f"クライアントへ返す Base64 (bytes): {modified_b64!r}\n")
+
+            # TCPクライアントへ送信
+            conn.sendall(modified_b64)
             conn.shutdown(socket.SHUT_WR)
             print("クライアントへ応答送信完了")
         except Exception as e:
@@ -72,7 +81,7 @@ def handle_client(conn, addr):
         print("Node.jsから応答なし。")
 
     conn.close()
-    print(f"接続終了: {addr}\n")
+    print(f"\n---------- 接続終了: {addr} ----------\n")
 
 
 def start_server():
@@ -83,7 +92,7 @@ def start_server():
     s.listen()
     s.setblocking(False)  # 非ブロッキングモード
     print(f"TCPゲートウェイサーバー起動中... {HOST}:{PORT}")
-    print("Ctrl+C で停止")
+    print("Ctrl+C で停止\n")
 
     try:
         while True:
@@ -94,8 +103,11 @@ def start_server():
                 threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
     except KeyboardInterrupt:
         print("Ctrl + C によりサーバーを停止します。")
+    except Exception as e:
+        print(f"サーバーエラー: {e}")
     finally:
         s.close()
+        print("ソケットをクリーンアップしました。")
         sys.exit(0)
 
 

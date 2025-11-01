@@ -9,15 +9,23 @@ app.post(
   "/upload",
   express.raw({ type: "application/octet-stream", limit: "50mb" }),
   async (req, res) => {
+    console.log("---------- リクエスト受信 ----------\n");
     try {
       const b64Buffer = req.body;
       console.log("Express が受け取った raw Buffer length:", b64Buffer.length);
-      console.log(`typeof(b64Buffer): ${b64Buffer}`);
+      console.log(`type: ${typeof b64Buffer}`);
+      console.log("b64Buffer: b64Buffer\n");
 
       // Base64 をデコードして中身確認
       const b64String = b64Buffer.toString("ascii"); // Base64 は ASCII テキスト
       const decoded = Buffer.from(b64String, "base64").toString("utf8");
-      console.log("デコード結果 (utf-8):", decoded);
+      console.log(`デコード結果 (utf-8): ${decoded}\n`);
+
+      const message = decoded + ", node proxy server!";
+      console.log(`次サーバへ送るメッセージ: ${message}`);
+      const messageB64 = Buffer.from(message, "utf8").toString("base64");
+      //   const messageB64 = Buffer.from(message, "utf8"); これだとダメ
+      console.log(`次サーバへ送る Base64 (bytes): ${messageB64}\n`);
 
       // TCP通信をPromiseで包んで「送信＋応答受信」を待つ
       const responseB64 = await new Promise((resolve, reject) => {
@@ -25,8 +33,8 @@ app.post(
         let responseChunks = [];
 
         client.connect(TCP_TARGET_PORT, TCP_TARGET_HOST, () => {
-          console.log("目的のTCPサーバへ送信");
-          client.write(b64Buffer); // Base64エンコード済みのまま送る
+          client.write(messageB64); // Base64エンコード済みのまま送る
+          console.log("目的のTCPサーバへ送信完了\n");
         });
 
         client.on("data", (data) => {
@@ -36,7 +44,23 @@ app.post(
 
         client.on("end", () => {
           const fullResponse = Buffer.concat(responseChunks);
-          resolve(fullResponse); // Base64文字列のバイト列を返す
+
+          const decodedResponse = Buffer.from(
+            fullResponse.toString("ascii"),
+            "base64"
+          ).toString("utf8");
+          console.log("🔍 デコード結果:", decodedResponse);
+
+          const modifiedMessage = decodedResponse + ", node proxy server!";
+          console.log("🧩 追記後のメッセージ:", modifiedMessage);
+
+          // 再度 Base64 エンコード
+          const modifiedB64 = Buffer.from(modifiedMessage, "utf8").toString(
+            "base64"
+          );
+          console.log("📤 再エンコード(Base64):", modifiedB64);
+
+          resolve(Buffer.from(modifiedB64, "ascii"));
         });
 
         client.on("error", (err) => {
@@ -51,7 +75,7 @@ app.post(
         .set("Content-Type", "application/octet-stream")
         .send(responseB64); // targetからの応答(Base64)をそのまま返す
 
-      console.log("HTTPレスポンス返却完了\n");
+      console.log("\n---------- レスポンス送信完了 ----------\n");
 
       // TCPクライアント接続を閉じた後にレスポンスを返す
     } catch (err) {
@@ -62,5 +86,5 @@ app.post(
 );
 
 app.listen(3000, () => {
-  console.log("Expressサーバ起動: http://localhost:3000");
+  console.log("Expressサーバ起動: http://localhost:3000\n");
 });
