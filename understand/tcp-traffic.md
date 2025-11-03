@@ -1,5 +1,36 @@
 # TCP-HTTP 通信の理解を深めるためのドキュメント
 
+## TCP リクエスト
+
+```python
+# with socket.socket.connect((HOST, PORT), timeout=5) as s:
+with socket.create_connection((HOST, PORT), timeout=5) as s: # ①
+    s.sendall(b64_bytes)
+    s.shutdown(socket.SHUT_WR)  # 書き込み終わりを明示（必要）
+
+# ①は以下の2行をまとめたもの
+# s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# s.connect((HOST, PORT))
+```
+
+#### `socket.create_connection((HOST, PORT), timeout=5)`：TCP 接続を開始
+
+- これは socket.socket() と connect() をまとめた 高レベルな便利関数
+- 返ってくる s は 接続済みのソケットオブジェクト
+
+#### `s.sendall(b64_bytes)`：TCP 接続上に バイナリデータを送信
+
+- `.sendall()` は `.send()` と違い、全データを送信し終えるまでブロッキングする（＝確実に全部送る）関数
+- TCP は一度にすべて送れるとは限りません（バッファ容量やネットワーク状況により分割される）。`.sendall()` は内部で `.send()` を繰り返し呼び、全バイトが送信されるまで待機する
+
+### s.shutdown(socket.SHUT_WR)：送信終了の明示的なシグナルをサーバに送る
+
+TCP には「半閉じ（half-close）」という概念がある：
+
+- SHUT_WR … 書き込み側（送信）を閉じる。もうデータを送れない。
+- SHUT_RD … 読み込み側（受信）を閉じる。もうデータを受け取らない。
+  これをしないとサーバ側の recv() は「相手が送信を閉じた」と認識できず、永遠に待ち続けることがある
+
 ## TCP サーバを起動し、複数クライアントからの接続を並行処理できるようにする処理
 
 ```python
