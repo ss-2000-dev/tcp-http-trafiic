@@ -15,16 +15,23 @@ def handle_client(conn, addr):
     """クライアントごとの接続処理""" 
     print(f"---------- 接続: {addr} ----------\n") 
     conn.setblocking(True) # なくても動作はする
-    data = b'' 
+
+    chunks = [] 
     try: 
         while True: 
             chunk = conn.recv(4096) 
             if not chunk: 
+                print("クライアントが接続を閉じました\n")
                 break 
-            data += chunk 
+            chunks.append(chunk)  # bytesをそのまま追加
+            print(f"{len(chunk)} バイト受信")
     except ConnectionResetError: 
         print(f"クライアント {addr} が切断されました。") 
 
+    # 全チャンクをまとめて1つのbytesに結合
+    data = b"".join(chunks)
+    print(f"受信完了: 総バイト数 {len(data)}")
+    
     if not data: 
         print("受信データなし")
         return 
