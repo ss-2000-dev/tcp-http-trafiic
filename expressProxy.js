@@ -61,10 +61,12 @@ app.post(
           console.log("📤 再エンコード(Base64):", modifiedB64);
 
           resolve(Buffer.from(modifiedB64, "ascii"));
+          client.destroy(); // 接続を明示的にクローズ
         });
 
         client.on("error", (err) => {
           console.error("TCPクライアントエラー:", err.message);
+          client.destroy(); // エラー時にも確実にクローズ
           reject(err);
         });
       });
